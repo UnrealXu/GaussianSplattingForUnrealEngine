@@ -109,19 +109,32 @@ TArray<FGaussianSplattingPoint> ParseSplatFromStream(std::istream& in)
 	}
 
 	std::string line;
-	std::getline(in, line);
+
+	// The PLY spec allows "comment" and "obj_info" lines anywhere in the header
+	// (e.g. Blender's exporter writes a comment line after the format line), so
+	// skip them wherever they appear.
+	auto getHeaderLine = [&in](std::string& outLine) {
+		while (std::getline(in, outLine)) {
+			if (outLine.rfind("comment", 0) != 0 && outLine.rfind("obj_info", 0) != 0) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	getHeaderLine(line);
 	if (line != "ply") {
 		UE_LOG(LogTemp, Warning, TEXT("Input data is not a .ply file."));
 		return Result;
 	}
 
-	std::getline(in, line);
+	getHeaderLine(line);
 	if (line != "format binary_little_endian 1.0") {
 		UE_LOG(LogTemp, Warning, TEXT("Unsupported .ply format."));
 		return Result;
 	}
 
-	std::getline(in, line);
+	getHeaderLine(line);
 	if (line.find("element vertex ") != 0) {
 		UE_LOG(LogTemp, Warning, TEXT("Missing vertex count."));
 		return Result;
@@ -137,7 +150,7 @@ TArray<FGaussianSplattingPoint> ParseSplatFromStream(std::istream& in)
 	UE_LOG(LogTemp, Log, TEXT("Loading %d points"), numPoints);
 	std::unordered_map<std::string, int> fields; // name -> index
 	for (int i = 0;; i++) {
-		if (!std::getline(in, line)) {
+		if (!getHeaderLine(line)) {
 			UE_LOG(LogTemp, Warning, TEXT("Unexpected end of header."));
 			return Result;
 		}
